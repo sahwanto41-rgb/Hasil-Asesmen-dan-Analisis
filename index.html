@@ -226,7 +226,38 @@ function addSt(){form('Tambah Peserta Didik',[['nisn','NISN','text'],['nis','NIS
 function impSt(f){rd(f,rows=>{const seen=new Set(),out=rows.slice(1).map((r,k)=>{const[nis,nisn,nama,jk,kelas]=r;let msg='';const x=db.st.find(s=>s.nisn==nisn);
 if(!nisn||!nama)msg='NISN dan nama wajib diisi';else if(x)msg=`Ditolak: NISN sudah terdaftar atas nama ${x.nama}`;else if(seen.has(nisn))msg='NISN ganda di dalam file';else if(!KLS.includes(kelas))msg='Kelas harus 1–6';else if(!canSt(kelas))msg='Anda bukan Guru Kelas untuk kelas ini';else if(!['L','P'].includes((jk||'').toUpperCase()))msg='Jenis kelamin harus L/P';seen.add(nisn);
 return{line:k+2,label:nama,ok:!msg,msg:msg||'Siap diimpor',run:()=>db.st.push({id:uid('s'),nis,nisn,nama,jk:jk.toUpperCase(),kelas})}});preview(out,'Impor Peserta Didik')})}
-function addTp(){form('Tambah Tujuan Pembelajaran',[['mapel','Mata pelajaran','sel',optM()],['kelas','Kelas','sel',optK()],['sem','Semester','sel',['1','2']],['teks','Tujuan pembelajaran (maks. 100 karakter)','text']],d=>{if(!d.teks){toast('Tujuan pembelajaran wajib diisi.');return false}if(d.teks.length>100){toast('Tujuan maksimal 100 karakter (batas format e-Rapor).');return false}const n={id:uid('t'),...d,kode:kodeTp(d.mapel,d.kelas)};db.tps.push(n);log('Tambah TP '+kdMap()[n.id])})}
+function addTp(){
+const M=optM(),K=optK().map(String);
+if(!M.length||!K.length)return toast('Anda belum memiliki mata pelajaran/kelas yang diampu.');
+const dm=M.includes(TPF)?TPF:M.length==1?M[0]:'',dk=K.includes(String(TPK))?String(TPK):K.length==1?K[0]:'',open=!dm||!dk;
+const op=(l,v,ph)=>(ph?'<option value="">— pilih —</option>':'')+l.map(o=>`<option value="${esc(o)}" ${o==v?'selected':''}>${esc(o)}</option>`).join('');
+modal(`<h3>Tambah Tujuan Pembelajaran</h3><div class="fm">
+<div id="tpSum" style="display:${open?'none':'flex'};align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--pr2)"><b id="tpSumT" style="flex:1;color:var(--pr)"></b><button type="button" onclick="tpUbah()">Ubah</button></div>
+<div id="tpSel" style="display:${open?'grid':'none'};grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+<label>Mata pelajaran<select id="tpM" onchange="tpSum()">${op(M,dm,M.length>1&&!dm)}</select></label>
+<label>Kelas<select id="tpK" onchange="tpSum()">${op(K,dk,K.length>1&&!dk)}</select></label>
+<label>Semester<select id="tpS" onchange="tpSum()">${op(['1','2'],semNow())}</select></label></div>
+<label>Tujuan pembelajaran <span class="mu">(satu baris = satu TP, maks. 100 karakter per TP)</span><textarea id="tpT" rows="5" oninput="tpCnt()" placeholder="Ketik TP di sini. Tekan Enter untuk menambah TP lain." style="width:100%;font:inherit;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);resize:vertical"></textarea></label>
+<div id="tpC" class="mu" style="min-height:20px"></div></div>
+<div class="bt"><button class="pr" onclick="tpSave(false)">Simpan</button><button onclick="tpSave(true)">Simpan &amp; tambah lagi</button><button onclick="closeM()">Batal</button></div>`);
+tpSum();tpCnt();setTimeout(()=>{const t=$('#tpT');if(t&&!open)t.focus()},30)}
+function tpSum(){const m=$('#tpM'),k=$('#tpK'),s=$('#tpS'),t=$('#tpSumT');if(t)t.textContent=(m.value||'(pilih mata pelajaran)')+' · Kelas '+(k.value||'?')+' · Semester '+s.value}
+function tpUbah(){$('#tpSum').style.display='none';$('#tpSel').style.display='grid'}
+function tpCnt(){const L=$('#tpT').value.split(/\r?\n/).map(x=>x.trim()),n=L.filter(Boolean).length,bad=[];L.forEach((x,i)=>{if(x.length>100)bad.push(`baris ${i+1} (${x.length} karakter)`)});const c=$('#tpC');c.style.color=bad.length?'var(--er)':'';c.textContent=bad.length?'Melebihi 100 karakter: '+bad.join(', '):(n?n+' TP siap disimpan':'')}
+function tpSave(more){
+const m=$('#tpM').value,k=$('#tpK').value,s=$('#tpS').value;
+if(!m||!k){tpUbah();return toast('Pilih mata pelajaran dan kelas dulu.')}
+if(!inScope(k,m))return toast('Di luar kelas/mapel yang Anda ampu.');
+const raw=$('#tpT').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+if(!raw.length)return toast('Tujuan pembelajaran wajib diisi.');
+const lg=raw.filter(x=>x.length>100);if(lg.length)return toast(`${lg.length} TP melebihi 100 karakter (batas format e-Rapor).`);
+const seen=new Set(),ok=[];let dup=0;
+raw.forEach(t=>{const q=nz(t);if(seen.has(q)||db.tps.some(x=>x.mapel==m&&x.kelas==k&&nz(x.teks)==q)){dup++;return}seen.add(q);ok.push(t)});
+if(!ok.length)return toast('Tujuan tersebut sudah ada.');
+ok.forEach(teks=>{const n={id:uid('t'),mapel:m,kelas:k,sem:s,teks,kode:kodeTp(m,k)};db.tps.push(n);log('Tambah TP '+kdMap()[n.id])});
+save();render();
+const msg=`${ok.length} TP disimpan`+(dup?` · ${dup} dilewati (sudah ada)`:'');
+if(more){const t=$('#tpT');t.value='';tpCnt();t.focus();toast(msg)}else{closeM();toast(msg)}}
 function impTp(f){rd(f,rows=>{const seen=new Set(),out=rows.slice(1).map((r,k)=>{const[,mapel,kelas,teks]=r;let msg='';
 if(!teks)msg='Tujuan pembelajaran wajib diisi';else if(!MP().includes(mapel))msg='Mata pelajaran tidak dikenal (gunakan nama persis seperti di menu Mata Pelajaran)';else if(!KLS.includes(kelas))msg='Kelas harus 1–6';else if(!inScope(kelas,mapel))msg='Di luar kelas/mapel yang Anda ampu';
 return{line:k+2,label:(teks||'').slice(0,60),ok:!msg,msg:msg||'Siap diimpor (kode TP dibuat otomatis)',run:()=>db.tps.push({id:uid('t'),kode:kodeTp(mapel,kelas),mapel,kelas,teks})}});preview(out,'Impor Tujuan Pembelajaran')})}
