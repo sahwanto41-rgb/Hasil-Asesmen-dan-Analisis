@@ -139,9 +139,9 @@ const log=m=>{db.au.push({t:new Date().toLocaleString('id-ID'),u:user||'-',m});s
 const toast=m=>{const t=$('#ts');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',4200)};
 /* ---------- Hak akses di sisi tampilan (server memeriksa ulang setiap perubahan) ---------- */
 const adm=()=>role=='Administrator',gur=()=>role=='Guru Kelas'||role=='Guru Mapel';
-const inScope=(k,m)=>adm()||(gur()&&ME.kelas.includes(k)&&ME.mapel.includes(m));
+const inScope=(k,m)=>adm()||(gur()&&ME.kelas.includes(k)&&(role=='Guru Kelas'||ME.mapel.includes(m)));
 const canSt=k=>adm()||(role=='Guru Kelas'&&ME.kelas.includes(k));
-const mine=()=>db.as.filter(a=>inScope(a.kelas,a.mapel)),optK=()=>adm()?KLS:ME.kelas,optM=()=>adm()?MP():ME.mapel,kelasLihat=()=>(adm()||role=='Kepala Sekolah')?KLS:[...ME.kelas].sort();
+const mine=()=>db.as.filter(a=>inScope(a.kelas,a.mapel)),optK=()=>adm()?KLS:ME.kelas,optM=()=>(adm()||role=='Guru Kelas')?MP():ME.mapel,kelasLihat=()=>(adm()||role=='Kepala Sekolah')?KLS:[...ME.kelas].sort();
 /* ---------- Cakupan tampilan data per pengguna ----------
    Administrator & Kepala Sekolah: semua data.
    Guru Kelas : semua data (murid, TP, asesmen, tindak lanjut, kokurikuler, rekap) pada kelas yang diampu.
