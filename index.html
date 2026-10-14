@@ -125,7 +125,7 @@ if(r.db&&!editing()){stale=false;render()}}}
 catch(e){saveErr='Gagal terhubung ke server ('+e.message+')';sv('Gagal menyimpan — akan dicoba lagi');clearTimeout(sT);sT=setTimeout(flush,8000)}
 busy=false;if(dirty)flush()}
 async function saveNow(){if(role=='Kepala Sekolah')return'Peran Kepala Sekolah hanya bisa melihat data, tidak bisa menyimpan. Masuk sebagai Admin/Guru.';clearTimeout(sT);let w=0;while(busy&&w++<150)await new Promise(r=>setTimeout(r,200));await flush();return saveErr}
-const save=()=>{anClr();if(role=='Kepala Sekolah')return;sv('Menyimpan…');clearTimeout(sT);sT=setTimeout(flush,900)},uidN=0,uid=p=>p+Date.now().toString(36)+(++uidN).toString(36)+Math.floor(Math.random()*1679616).toString(36);
+let uidN=0;const save=()=>{anClr();if(role=='Kepala Sekolah')return;sv('Menyimpan…');clearTimeout(sT);sT=setTimeout(flush,900)},uid=p=>p+Date.now().toString(36)+(++uidN).toString(36)+Math.floor(Math.random()*1679616).toString(36);
 const editing=()=>{const e=document.activeElement;return $('#modal').style.display=='flex'||(e&&['INPUT','SELECT','TEXTAREA'].includes(e.tagName))};
 async function poll(){if(!online||busy||document.hidden)return;
 try{const r=await A('sinkron',{rev});if(busy)return;
