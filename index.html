@@ -120,23 +120,23 @@ if(r.error){sv('Gagal');toast(r.error);if(/password|Username|dinonaktifkan/i.tes
 else{const local=diff(JSON.parse(snap),db);
 if(r.db){const kp=db.kk,s=norm(r.db);base=clone(s);db=clone(s);anClr();applyOps(db,local);if(!kkOK)db.kk=kp;stale=true}else base=JSON.parse(snap);
 rev=r.rev;sv('✓ Tersimpan di Google Sheets');
-if(r.ditolak&&r.ditolak.length)toast('Sebagian perubahan ditolak: '+r.ditolak.join(' · '));
+if(r.ditolak&&r.ditolak.length)toast('Sebagian perubahan ditolak: '+r.ditolak.join(' · '),12000);
 if(r.db&&!editing()){stale=false;render()}}}
 catch(e){sv('Gagal menyimpan — akan dicoba lagi');clearTimeout(sT);sT=setTimeout(flush,8000)}
 busy=false;if(dirty)flush()}
-const save=()=>{anClr();if(role=='Kepala Sekolah')return;sv('Menyimpan…');clearTimeout(sT);sT=setTimeout(flush,900)},uid=p=>p+Date.now().toString(36)+Math.floor(Math.random()*999);
+const save=()=>{anClr();if(role=='Kepala Sekolah')return;sv('Menyimpan…');clearTimeout(sT);sT=setTimeout(flush,900)},uidN=0,uid=p=>p+Date.now().toString(36)+(++uidN).toString(36)+Math.floor(Math.random()*1679616).toString(36);
 const editing=()=>{const e=document.activeElement;return $('#modal').style.display=='flex'||(e&&['INPUT','SELECT','TEXTAREA'].includes(e.tagName))};
 async function poll(){if(!online||busy||document.hidden)return;
 try{const r=await A('sinkron',{rev});if(busy)return;
 if(r.error){if(/password|Username|dinonaktifkan/i.test(r.error)){online=false;alert('Sesi berakhir: '+r.error);location.reload()}return}
 if(JSON.stringify(r.me)!==JSON.stringify(ME)){ME=r.me;role=ME.peran;user=ME.nama;stale=true}
-if(!r.same){const local=diff(base,db),kp=db.kk,s=norm(r.db);base=clone(s);db=clone(s);anClr();applyOps(db,local);if(!kkOK)db.kk=kp;rev=r.rev;stale=true;toast('Data diperbarui dari pengguna lain')}
+if(!r.same&&r.rev!==rev){const local=diff(base,db),kp=db.kk,s=norm(r.db);base=clone(s);db=clone(s);anClr();applyOps(db,local);if(!kkOK)db.kk=kp;rev=r.rev;stale=true;toast('Data diperbarui dari pengguna lain')}
 if(stale&&!editing()){stale=false;render()}}catch(e){}}
 function rebase(r){const local=diff(base,db),kp=db.kk,s=norm(r.db);base=clone(s);db=clone(s);anClr();applyOps(db,local);if(!kkOK)db.kk=kp;rev=r.rev}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&online)poll()});
 addEventListener('beforeunload',e=>{if(online&&base&&(busy||diff(base,db).length)){e.preventDefault();e.returnValue=''}});
 const log=m=>{db.au.push({t:new Date().toLocaleString('id-ID'),u:user||'-',m});save()};
-const toast=m=>{const t=$('#ts');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',4200)};
+const toast=(m,ms)=>{const t=$('#ts');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',ms||4200)};
 /* ---------- Hak akses di sisi tampilan (server memeriksa ulang setiap perubahan) ---------- */
 const adm=()=>role=='Administrator',gur=()=>role=='Guru Kelas'||role=='Guru Mapel';
 const inScope=(k,m)=>adm()||(gur()&&ME.kelas.includes(k)&&(role=='Guru Kelas'||ME.mapel.includes(m)));
