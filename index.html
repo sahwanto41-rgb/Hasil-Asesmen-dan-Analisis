@@ -90,7 +90,7 @@ const PERAN=['Administrator','Kepala Sekolah','Guru Kelas','Guru Mapel'],FU=['Pe
 let db,base,user=null,role='',ME={nama:'',nip:'',kelas:[],mapel:[]},pg='dash',cur=null,pend=null,pendT='',fh=null,fcb=null,tt,US=null,usLoading=false;
 /* Isi DEF_URL dengan alamat /exec backend baru bila ingin tertanam di file ini; bila kosong, alamat diisi di halaman masuk. */
 const DEF_URL='https://script.google.com/macros/s/AKfycbxfwp64403sjNYtOZUQQY-89iTI6S6gnx8q1BDDHumAdkMaWZgn3mUDTrzwhrqonRUYHw/exec',URL_LAMA='https://script.google.com/macros/s/AKfycbwGgL5MDcgmEc2J5KrWmnR7fbQSf20AOdkupJEfN5KdnWjfZS7g-UBZlzZ-yGU8fGbkbg/exec',URLRE=/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
-let srvV=0,kkOK=true,KU='',KP='',RK={k:'4',m:'Matematika'},TPF='',TPK='',URLS=DEF_URL,online=false,rev=0,sT,busy=false,dirty=false,stale=false,poller=null;
+let saveErr='',srvV=0,kkOK=true,KU='',KP='',RK={k:'4',m:'Matematika'},TPF='',TPK='',URLS=DEF_URL,online=false,rev=0,sT,busy=false,dirty=false,stale=false,poller=null;
 try{if(DEF_URL)localStorage.setItem('l1url',DEF_URL);else URLS=localStorage.getItem('l1url')||''}catch(e){}
 const clone=o=>JSON.parse(JSON.stringify(o)),HC={};
 const sv=m=>{const e=$('#sv');if(e)e.textContent=m};
@@ -112,18 +112,19 @@ d.au.slice(b.au.length).forEach(e=>o.push({k:'au',e}));
 Object.keys(d.cfg).forEach(key=>{if(d.cfg[key]!==b.cfg[key])o.push({k:'cfg',key,v:d.cfg[key]})});return o}
 async function api(b,u){const r=await fetch(u||URLS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(b)});const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error('Server membalas bukan JSON (HTTP '+r.status+'): '+t.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,160))}}
 const A=(aksi,x)=>api({aksi,user:KU,pass:KP,...x});
-async function flush(){if(!online)return;if(busy){dirty=true;return}
+async function flush(){if(!online){saveErr='Aplikasi offline: perubahan belum terkirim ke server';return}if(busy){dirty=true;return}
 const snap=JSON.stringify(db),ops=diff(base,db);if(!ops.length){sv('✓ Tersimpan di Google Sheets');return}
-busy=true;dirty=false;sv('Menyimpan…');
+busy=true;dirty=false;saveErr='';sv('Menyimpan…');
 try{const r=await A('simpan',{rev,ops});
-if(r.error){sv('Gagal');toast(r.error);if(/password|Username|dinonaktifkan/i.test(r.error)){alert('Sesi berakhir: '+r.error);location.reload();return}}
+if(r.error){sv('Gagal');saveErr=r.error;toast(r.error);if(/password|Username|dinonaktifkan/i.test(r.error)){alert('Sesi berakhir: '+r.error);location.reload();return}}
 else{const local=diff(JSON.parse(snap),db);
 if(r.db){const kp=db.kk,s=norm(r.db);base=clone(s);db=clone(s);anClr();applyOps(db,local);if(!kkOK)db.kk=kp;stale=true}else base=JSON.parse(snap);
 rev=r.rev;sv('✓ Tersimpan di Google Sheets');
-if(r.ditolak&&r.ditolak.length)toast('Sebagian perubahan ditolak: '+r.ditolak.join(' · '),12000);
+if(r.ditolak&&r.ditolak.length)saveErr='Ditolak server: '+r.ditolak.join(' · ');if(r.ditolak&&r.ditolak.length)toast('Sebagian perubahan ditolak: '+r.ditolak.join(' · '),12000);
 if(r.db&&!editing()){stale=false;render()}}}
-catch(e){sv('Gagal menyimpan — akan dicoba lagi');clearTimeout(sT);sT=setTimeout(flush,8000)}
+catch(e){saveErr='Gagal terhubung ke server ('+e.message+')';sv('Gagal menyimpan — akan dicoba lagi');clearTimeout(sT);sT=setTimeout(flush,8000)}
 busy=false;if(dirty)flush()}
+async function saveNow(){if(role=='Kepala Sekolah')return'Peran Kepala Sekolah hanya bisa melihat data, tidak bisa menyimpan. Masuk sebagai Admin/Guru.';clearTimeout(sT);let w=0;while(busy&&w++<150)await new Promise(r=>setTimeout(r,200));await flush();return saveErr}
 const save=()=>{anClr();if(role=='Kepala Sekolah')return;sv('Menyimpan…');clearTimeout(sT);sT=setTimeout(flush,900)},uidN=0,uid=p=>p+Date.now().toString(36)+(++uidN).toString(36)+Math.floor(Math.random()*1679616).toString(36);
 const editing=()=>{const e=document.activeElement;return $('#modal').style.display=='flex'||(e&&['INPUT','SELECT','TEXTAREA'].includes(e.tagName))};
 async function poll(){if(!online||busy||document.hidden)return;
@@ -190,7 +191,7 @@ function asFilt(){const m=document.querySelector('#mb select[name=mapel]'),k=doc
 function tglAll(n){const l=[...document.querySelectorAll(`#mb input[name="${n}"]`)].filter(e=>e.closest('label').style.display!='none'),all=l.every(e=>e.checked);l.forEach(e=>e.checked=!all)}
 function sub(){const d={};document.querySelectorAll('#mb [name]').forEach(e=>{if(e.type=='checkbox'){d[e.name]=d[e.name]||[];if(e.checked)d[e.name].push(e.value)}else d[e.name]=e.type=='password'?e.value:e.value.trim()});if(fcb(d)!==false){closeM();save();render()}}
 function preview(rows,t){pend=rows;pendT=t;const v=rows.filter(r=>r.ok).length;modal(`<h3>${esc(t)}</h3><p>${rows.length} baris dibaca · <b style="color:var(--ok)">${v} valid</b> · <b style="color:var(--er)">${rows.length-v} error</b></p><div class="sc"><table><tr><th>Baris<th>Data<th>Status<th>Keterangan</tr>${rows.map(r=>`<tr><td>${r.line}<td>${esc(r.label)}<td>${r.ok?'✓ Valid':'✕ Error'}<td>${esc(r.msg)}`).join('')}</table></div><div class="bt"><button class="pr" onclick="commit()" ${v?'':'disabled'}>Impor data valid</button><button onclick="closeM()">Batal</button></div><p class="mu">Data bermasalah tidak diimpor. Perbaiki file, lalu unggah ulang.</p>`)}
-function commit(){const ok=pend.filter(r=>r.ok);ok.forEach(r=>r.run());log(`${pendT}: ${ok.length} dari ${pend.length} baris berhasil, ${pend.length-ok.length} gagal validasi`);closeM();save();render();toast(ok.length+' data berhasil diimpor')}
+async function commit(){if(role=='Kepala Sekolah')return toast('Peran Kepala Sekolah hanya bisa melihat data; impor tidak bisa disimpan.',9000);const tot=pend.length,ok=pend.filter(r=>r.ok);pend=[];if(!ok.length)return;ok.forEach(r=>r.run());log(`${pendT}: ${ok.length} dari ${tot} baris berhasil, ${tot-ok.length} gagal validasi`);closeM();render();toast(ok.length+' data masuk, menyimpan ke server…',60000);const e=await saveNow();toast(e?`⚠ ${ok.length} data tampil di layar tetapi BELUM tersimpan di server: ${e}`:`✓ ${ok.length} data berhasil diimpor dan tersimpan`,e?20000:4500)}
 function put(a,sid,t,v,src){db.sc[a.id]=db.sc[a.id]||{};const r=db.sc[a.id][sid]=db.sc[a.id][sid]||{},o=r[t];if(o===v||(o==null&&v==null))return;v==null?delete r[t]:r[t]=v;const s=db.st.find(x=>x.id==sid);log(`${src||'Input'}: nilai ${s.nama} · ${tp(t).kode} · ${a.nama} dari ${o??'kosong'} menjadi ${v??'kosong'}`);if(a.status=='Draft')a.status='Input'}
 function putp(a,sid,t,v){db.pb[a.id]=db.pb[a.id]||{};const r=db.pb[a.id][sid]=db.pb[a.id][sid]||{},o=r[t];if(o===v||(o==null&&v==null))return;v==null?delete r[t]:r[t]=v;const s=db.st.find(x=>x.id==sid);log(`Nilai perbaikan: ${s.nama} · ${tp(t).kode} · ${a.nama} dari ${o??'kosong'} menjadi ${v??'kosong'}`)}
 /* ---------- Sel dinamis pada tabel Input (diperbarui di tempat agar fokus papan ketik tidak hilang) ---------- */
@@ -473,7 +474,7 @@ $('#app').innerHTML=`<nav><h1>Penilaian &amp; Analisis Asesmen<br><small>SDN Lan
 const fase=k=>k<=2?'A':k<=4?'B':'C',nz=t=>String(t??'').toLowerCase().replace(/\s+/g,' ').trim();
 const cv=c=>{let v=c&&c.value;if(v&&typeof v=='object'){if(v.richText)v=v.richText.map(x=>x.text).join('');else if('result'in v)v=v.result;else if('text'in v)v=v.text}return v==null?'':String(v).trim()};
 async function xl(f){if(!window.ExcelJS)throw new Error('pustaka ExcelJS belum termuat (perlu internet)');const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());wb.calcProperties={fullCalcOnLoad:true};return wb}
-async function xs(wb,f,suf){const b=await wb.xlsx.writeBuffer(),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([b],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=f.name.replace(/\.xlsx$/i,'')+suf+'.xlsx';a.click();log('Ekspor format e-Rapor: '+a.download)}
+async function xs(wb,f,suf){const b=await wb.xlsx.writeBuffer(),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([b],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=f.name.replace(/\.xlsx$/i,'')+suf+'.xlsx';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},5000);log('Ekspor format e-Rapor: '+a.download)}
 const mpDari=t=>MP().filter(m=>nz(t).includes(nz(m))).sort((a,b)=>b.length-a.length)[0];
 const kodeTp=(m,k)=>{let p=m.split(/\s+/).filter(w=>w.length>2).map(w=>w[0]).join('').toUpperCase()||'TP';if(p=='PP')p='TP';let n=db.tps.filter(t=>t.mapel==m&&t.kelas==k).length+1;while(db.tps.some(t=>t.kode==`${p}.${k}.${n}`))n++;return`${p}.${k}.${n}`};
 const kdMap=()=>{const L=db.tps;if(kdMap.l!==L||kdMap.n!==L.length){const c={},cnt={};L.forEach(t=>{const k=t.mapel+'|'+t.kelas+'|'+(t.sem||1);cnt[k]=(cnt[k]||0)+1;c[t.id]=`TP.${t.kelas}${t.sem||1}${cnt[k]}`});kdMap.l=L;kdMap.n=L.length;kdMap.c=c}return kdMap.c};
@@ -482,7 +483,7 @@ kdA=(t,a)=>t?(kdMap()[t.id]||t.kode):'?',kdI=(a,id)=>kdA(db.tps.find(x=>x.id==id
 const bad=(m,e)=>toast(m+(e?': '+e.message:''));
 /* TP: A=NO B=TINGKAT C=FASE D=SEMESTER E=TUJUAN (maks. 100 karakter); judul A1 memuat nama mata pelajaran */
 async function impTpX(f){try{const ws=(await xl(f)).worksheets[0],mapel=mpDari(cv(ws.getCell('A1')));if(!mapel)return bad('Mata pelajaran pada judul template tidak cocok dengan menu Mata Pelajaran');
-XFs('tp|'+mapel,cv(ws.getCell('C2')));const seen=new Set(),out=[];ws.eachRow((r,n)=>{if(n<4)return;const kelas=cv(r.getCell(2)),fs=cv(r.getCell(3)).toUpperCase(),sem=cv(r.getCell(4)),teks=cv(r.getCell(5));if(!kelas&&!teks)return;let msg='';
+{const c2=cv(ws.getCell('C2'));if(c2)XFs('tp|'+mapel,c2)}const seen=new Set(),out=[];ws.eachRow((r,n)=>{if(n<4)return;const kelas=cv(r.getCell(2)),fs=cv(r.getCell(3)).toUpperCase(),sem=cv(r.getCell(4)),teks=cv(r.getCell(5));if(!kelas&&!teks)return;let msg='';
 if(!teks)msg='Tujuan pembelajaran kosong';else if(teks.length>100)msg=`Tujuan ${teks.length} karakter (maks. 100)`;else if(!KLS.includes(kelas))msg='Tingkat harus 1–6';else if(fs!=fase(+kelas))msg=`Fase harus ${fase(+kelas)} untuk tingkat ${kelas}`;else if(!['1','2'].includes(sem))msg='Semester harus 1 atau 2';else if(!inScope(kelas,mapel))msg='Di luar kelas/mapel yang Anda ampu';else if(db.tps.some(t=>t.mapel==mapel&&t.kelas==kelas&&nz(t.teks)==nz(teks))||seen.has(kelas+nz(teks)))msg='Tujuan yang sama sudah ada';seen.add(kelas+nz(teks));
 out.push({line:n,label:teks.slice(0,60),ok:!msg,msg:msg||'Siap diimpor (kode TP dibuat otomatis)',run:()=>db.tps.push({id:uid('t'),kode:kodeTp(mapel,kelas),mapel,kelas,sem,teks})})});preview(out,'Impor Format TP · '+mapel)}catch(e){bad('Gagal membaca file',e)}}
 /* Nilai rapor: T/R per murid diturunkan dari ketercapaian TP (hasil setelah perbaikan). R = TP di bawah KKTP (min. 1 bila nilai < 100, tidak ada bila 100); T = TP tertinggi. Guru dapat mengubahnya di Excel. */
@@ -495,14 +496,14 @@ const dkod=t=>{const x=nz(t),k=Object.entries({keimanan:'kim',kewargaan:'kew',pe
 
 /* ---------- Ekspor langsung berformat e-Rapor (tanpa template). ID resmi (GUID) dipakai dari file yang pernah diimpor di peramban ini ---------- */
 const XHF={type:'pattern',pattern:'solid',fgColor:{argb:'FF4F81BD'}},XBD={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}},XCL=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26)}return s};
-const XFg=k=>{try{return JSON.parse(localStorage.getItem('fm|'+k))}catch(e){return null}},XFs=(k,v)=>{try{localStorage.setItem('fm|'+k,JSON.stringify(v))}catch(e){}};
+const FM_DEF={'tp|Bahasa Madura':300311901},XFg=k=>{let v=null;try{v=JSON.parse(localStorage.getItem('fm|'+k))}catch(e){}return v||FM_DEF[k]||null},XFs=(k,v)=>{try{localStorage.setItem('fm|'+k,JSON.stringify(v))}catch(e){}};
 const Xh=(ws,a,v,sz)=>{const c=ws.getCell(a);c.value=v;c.font={name:'Calibri',size:sz||12,bold:true,color:{argb:'FFFFFFFF'}};c.fill=XHF;c.border=XBD;c.alignment={horizontal:'center',vertical:'middle',wrapText:true}},
 Xb=(c,h,sz)=>{c.border=XBD;c.font={name:'Calibri',size:sz||11};c.alignment={vertical:'top',wrapText:true,horizontal:h}},
 Xt=(ws,a,v,sz,b)=>{const c=ws.getCell(a);c.value=v;c.font={name:'Calibri',size:sz||11,bold:!!b}},
 Xm=(ws,a)=>{const p=a.split(':');if(p[0]!=p[1])ws.mergeCells(a)},
 Xn=()=>{if(!window.ExcelJS)throw new Error('pustaka ExcelJS belum termuat (perlu internet)');const w=new ExcelJS.Workbook();w.calcProperties={fullCalcOnLoad:true};return w},
 Xf=s=>s.replace(/\s+/g,'_'),Xv=(a,i)=>a[i]==null||a[i]===''?null:(isNaN(a[i])?a[i]:+a[i]);
-async function Xd(wb,nama){const b=await wb.xlsx.writeBuffer(),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([b],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=nama;a.click();log('Ekspor format e-Rapor: '+nama)}
+async function Xd(wb,nama){const b=await wb.xlsx.writeBuffer(),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([b],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=nama;a.style.display='none';document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},5000);log('Ekspor format e-Rapor: '+nama)}
 const XDN={kim:'keimanan dan ketakwaan terhadap Tuhan Yang Maha Esa',kew:'kewargaan',pkr:'penalaran kritis',kre:'kreativitas',kol:'kolaborasi',kmd:'kemandirian',kes:'kesehatan',kom:'komunikasi'};
 /* TP */
 async function expTp1(mapel,kosong){try{const l=db.tps.filter(t=>t.mapel==mapel&&(!TPK||t.kelas==TPK)&&seeKM(t.kelas,t.mapel)).sort((a,b)=>a.kelas-b.kelas||(a.sem||1)-(b.sem||1));if(!l.length&&!kosong)return bad('Belum ada TP untuk '+mapel+(TPK?' kelas '+TPK:''));
@@ -511,8 +512,8 @@ const wb=Xn(),ws=wb.addWorksheet('Worksheet'),id=XFg('tp|'+mapel);Xt(ws,'A1','FO
 for(let i=0;i<100;i++){const r=4+i,t=l[i],c=[1,2,3,4,5].map(j=>ws.getCell(r,j));ws.getRow(r).height=22;c.forEach((x,j)=>Xb(x,j<4?'center':undefined));c[0].value=i+1;
 if(t){c[1].value=+t.kelas;c[2].value=fase(+t.kelas);c[3].value=+(t.sem||1);c[4].value=t.teks}
 c[1].dataValidation={type:'list',allowBlank:true,formulae:['"1, 2, 3, 4, 5, 6"']};c[2].dataValidation={type:'list',allowBlank:true,formulae:['"A, B, C"']};c[3].dataValidation={type:'list',allowBlank:true,formulae:['"1, 2"']};c[4].dataValidation={type:'custom',allowBlank:true,formulae:['LEN(E'+r+')<=100']}}
-await Xd(wb,'f_tp__'+Xf(mapel)+(TPK?'__Kelas_'+TPK:'')+'__.xlsx');if(!l.length)return toast('Belum ada TP untuk '+mapel+(TPK?' kelas '+TPK:'')+': format kosong diunduh'+(id?'':' · kode mata pelajaran (sel C2) belum ada: impor dulu file format TP dari e-Rapor'));const p=l.filter(t=>t.teks.length>100).length;toast(`${Math.min(l.length,100)} TP ditulis${l.length>100?' (format hanya 100 baris)':''}${p?` · ${p} TP melebihi 100 karakter, persingkat dahulu`:''}${id?'':' · kode mata pelajaran (sel C2) belum ada: impor dulu file format TP dari e-Rapor'}`)}catch(e){bad('Gagal',e)}}
-async function expTpX(){if(TPF)return expTp1(TPF,true);const ms=vMapel().filter(m=>(!TPF||m==TPF)&&db.tps.some(t=>t.mapel==m&&(!TPK||t.kelas==TPK)&&seeKM(t.kelas,t.mapel)));if(!ms.length)return bad('Belum ada TP untuk diekspor');for(const m of ms){await expTp1(m);await new Promise(r=>setTimeout(r,600))}}
+await Xd(wb,'f_tp__'+Xf(mapel)+(TPK?'__Kelas_'+TPK:'')+'__.xlsx');if(!l.length)return toast('Belum ada TP untuk '+mapel+(TPK?' kelas '+TPK:'')+': format kosong diunduh'+(id?'':' · kode mata pelajaran (sel C2) belum ada: impor dulu file format TP dari e-Rapor'),id?6000:14000);const p=l.filter(t=>t.teks.length>100).length;toast(`${Math.min(l.length,100)} TP ditulis${l.length>100?' (format hanya 100 baris)':''}${p?` · ${p} TP melebihi 100 karakter, persingkat dahulu`:''}${id?'':' · kode mata pelajaran (sel C2) belum ada: impor dulu file format TP dari e-Rapor'}`,id?6000:14000)}catch(e){bad('Gagal',e)}}
+async function expTpX(){const ms=TPF?[TPF]:vMapel();if(!ms.length)return bad('Tidak ada mata pelajaran yang bisa diekspor');const ada=m=>db.tps.some(t=>t.mapel==m&&(!TPK||t.kelas==TPK)&&seeKM(t.kelas,t.mapel)),isi=ms.filter(ada),target=TPF?ms:(isi.length?isi:ms);if(!TPF&&!isi.length)toast('Belum ada TP sama sekali: format kosong diunduh untuk '+ms.length+' mata pelajaran. Jika browser menanyakan, izinkan unduhan ganda.',9000);for(const m of target){await expTp1(m,true);if(target.length>1)await new Promise(r=>setTimeout(r,800))}}
 /* Nilai rapor */
 async function expNilai(kl,mp,as){try{kl=kl||RK.k;mp=mp||RK.m;const tps=as?[...new Set(as.items.map(i=>i.tp))].map(id=>db.tps.find(t=>t.id==id)).filter(Boolean):db.tps.filter(t=>t.kelas==kl&&t.mapel==mp).sort((a,b)=>(a.sem||1)-(b.sem||1));if(!tps.length)return bad('Belum ada TP untuk '+mp+' kelas '+kl);
 const fm=XFg(`nr|${kl}|${mp}`)||{h:[],tp:{},st:{}},wb=Xn(),ws=wb.addWorksheet('Worksheet'),n=tps.length,F=8,L=F+n-1,pT=L+1,pO=L+2,pN=L+3,R=XCL,N=as?asN(as):na(kl,mp),S=as?asS(as):nilaiTP(kl,mp);
