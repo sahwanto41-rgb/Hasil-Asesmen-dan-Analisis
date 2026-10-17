@@ -139,17 +139,18 @@ addEventListener('beforeunload',e=>{if(online&&base&&(busy||diff(base,db).length
 const log=m=>{db.au.push({t:new Date().toLocaleString('id-ID'),u:user||'-',m});save()};
 const toast=(m,ms)=>{const t=$('#ts');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',ms||4200)};
 /* ---------- Hak akses di sisi tampilan (server memeriksa ulang setiap perubahan) ---------- */
+const mpK=x=>String(x==null?'':x).replace(/\s+/g,' ').trim().toLowerCase(),mpMe=()=>{const L=MP(),r=[];(ME.mapel||[]).forEach(x=>{const f=L.find(m=>mpK(m)==mpK(x))||String(x).trim();if(f&&!r.includes(f))r.push(f)});return r},mpOk=m=>mpMe().includes(m);
 const adm=()=>role=='Administrator',gur=()=>role=='Guru Kelas'||role=='Guru Mapel';
-const inScope=(k,m)=>adm()||(gur()&&ME.kelas.includes(k)&&(role=='Guru Kelas'||ME.mapel.includes(m)));
+const inScope=(k,m)=>adm()||(gur()&&ME.kelas.includes(k)&&(role=='Guru Kelas'||mpOk(m)));
 const canSt=k=>adm()||(role=='Guru Kelas'&&ME.kelas.includes(k));
-const mine=()=>db.as.filter(a=>inScope(a.kelas,a.mapel)),optK=()=>adm()?KLS:ME.kelas,optM=()=>(adm()||role=='Guru Kelas')?MP():ME.mapel,kelasLihat=()=>(adm()||role=='Kepala Sekolah')?KLS:[...ME.kelas].sort();
+const mine=()=>db.as.filter(a=>inScope(a.kelas,a.mapel)),optK=()=>adm()?KLS:ME.kelas,optM=()=>(adm()||role=='Guru Kelas')?MP():mpMe(),kelasLihat=()=>(adm()||role=='Kepala Sekolah')?KLS:[...ME.kelas].sort();
 /* ---------- Cakupan tampilan data per pengguna ----------
    Administrator & Kepala Sekolah: semua data.
    Guru Kelas : semua data (murid, TP, asesmen, tindak lanjut, kokurikuler, rekap) pada kelas yang diampu.
    Guru Mapel : data pada kelas yang diampu DAN khusus mata pelajaran yang diampu (murid tetap tampil per kelas agar nilai dapat diinput).
    Data lain disembunyikan di tampilan; sinkronisasi ke server tetap memakai data lengkap. */
-const lihatSemua=()=>adm()||role=='Kepala Sekolah',seeK=k=>lihatSemua()||ME.kelas.includes(k),seeKM=(k,m)=>lihatSemua()||(ME.kelas.includes(k)&&(role=='Guru Kelas'||ME.mapel.includes(m)));
-const vSt=()=>db.st.filter(s=>seeK(s.kelas)),vTp=()=>db.tps.filter(t=>seeKM(t.kelas,t.mapel)),vAs=()=>db.as.filter(a=>seeKM(a.kelas,a.mapel)),vFu=()=>{const ok=new Set(vAs().map(a=>a.id));return db.fu.filter(f=>ok.has(f.aid))},vMapel=()=>role=='Guru Mapel'?MP().filter(m=>ME.mapel.includes(m)):MP(),vKt=()=>db.kt.filter(k=>seeKM(k.kelas,k.mapel));
+const lihatSemua=()=>adm()||role=='Kepala Sekolah',seeK=k=>lihatSemua()||ME.kelas.includes(k),seeKM=(k,m)=>lihatSemua()||(ME.kelas.includes(k)&&(role=='Guru Kelas'||mpOk(m)));
+const vSt=()=>db.st.filter(s=>seeK(s.kelas)),vTp=()=>db.tps.filter(t=>seeKM(t.kelas,t.mapel)),vAs=()=>db.as.filter(a=>seeKM(a.kelas,a.mapel)),vFu=()=>{const ok=new Set(vAs().map(a=>a.id));return db.fu.filter(f=>ok.has(f.aid))},vMapel=()=>role=='Guru Mapel'?MP().filter(m=>mpOk(m)):MP(),vKt=()=>db.kt.filter(k=>seeKM(k.kelas,k.mapel));
 const scopeNote=()=>lihatSemua()?'':role=='Guru Kelas'?`Data yang ditampilkan dibatasi untuk Kelas ${ME.kelas.join(', ')||'–'} (semua mata pelajaran di kelas tersebut).`:`Data yang ditampilkan dibatasi untuk Kelas ${ME.kelas.join(', ')||'–'} · ${ME.mapel.join(', ')||'–'}.`,sn=()=>scopeNote()?`<p class="mu">${esc(scopeNote())}</p>`:'';
 const tp=id=>{const t=db.tps.find(x=>x.id==id);return t?Object.assign({},t,{kode:kdMap()[t.id]||t.kode}):{kode:'?',teks:''}},curA=(l=vAs())=>l.find(a=>a.id==cur)||l[0],curIn=()=>curA(mine()),sk=(a,sid,t)=>(db.sc[a.id]||{})[sid]?.[t],pbv=(a,sid,t)=>(db.pb[a.id]||{})[sid]?.[t];
 const nl=(i,v)=>v==null?null:Math.round(v/i.max*1000)/10,tgl=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())};
